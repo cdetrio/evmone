@@ -358,6 +358,17 @@ void FUNCNAME(montmul_noninterleaved)(UINT* const out, const UINT* const x, cons
 
 // algorithm 14.36, Handbook of Applied Cryptography, http://cacr.uwaterloo.ca/hac/about/chap14.pdf
 void FUNCNAME(montmul)(UINT* const out, const UINT* const x, const UINT* const y, const UINT* const m, const UINT inv){
+
+  for (int i=0; i<NUM_LIMBS;i++) {
+    std::cout << "op_mulmodmont384 bigint.h inputs before doing anything. i=" << i << " x[i]: " << x[i] << std::endl;
+  }
+
+  for (int i=0; i<NUM_LIMBS;i++) {
+    std::cout << "op_mulmodmont384 bigint.h inputs before doing anything. i=" << i << " y[i]: " << y[i] << std::endl;
+  }
+  
+
+
   UINT A[NUM_LIMBS*2+1];
   for (int i=0;i<NUM_LIMBS*2+1;i++)
     A[i]=0;
@@ -390,13 +401,24 @@ void FUNCNAME(montmul)(UINT* const out, const UINT* const x, const UINT* const y
     A[i+NUM_LIMBS]+=carry;
   }
 
+  
+
   // instead of right shift, we just get the correct values
-  for (int i=0; i<NUM_LIMBS;i++)
+  for (int i=0; i<NUM_LIMBS;i++) {
+    std::cout << "op_mulmodmont384 bigint.h i=" << i+NUM_LIMBS << " A[i+NUM_LIMBS]: " << A[i + NUM_LIMBS] << std::endl;
     out[i] = A[i+NUM_LIMBS];
+  }
+
 
   // final subtraction, first see if necessary
   if (A[NUM_LIMBS*2]>0 || FUNCNAME(less_than_or_equal)(m,out))
       FUNCNAME(subtract)(out, out, m);
+  
+
+  for (int i=0; i<NUM_LIMBS;i++) {
+    std::cout << "op_mulmodmont384 bigint.h result. i=" << i << " out[i]: " << out[i] << std::endl;
+  }
+
 }
 
 // like montmul, but with two of the args hard-coded

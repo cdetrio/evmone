@@ -1287,7 +1287,7 @@ const instruction* op_addmod384(const instruction* instr, execution_state& state
     const auto y = &state.memory[static_cast<size_t>(y_offset)];
     const auto m = &state.memory[static_cast<size_t>(m_offset)];
 
-    std::cout << "op_addmodmont384\n  x = ";
+    std::cout << "op_addmod384\n  x = ";
     logU384(reinterpret_cast<uint8_t*>(x));
     std::cout << "  y = ";
     logU384(reinterpret_cast<uint8_t*>(y));
@@ -1323,15 +1323,133 @@ const instruction* op_submod384(const instruction* instr, execution_state& state
     const auto y = &state.memory[static_cast<size_t>(y_offset)];
     const auto m = &state.memory[static_cast<size_t>(m_offset)];
 
+    std::cout << "op_submod384\n  x = ";
+    logU384(reinterpret_cast<uint8_t*>(x));
+    std::cout << "  y = ";
+    logU384(reinterpret_cast<uint8_t*>(y));
+
     subtractmod384_64bitlimbs(
         reinterpret_cast<uint64_t*>(x),
         reinterpret_cast<uint64_t*>(x),
         reinterpret_cast<uint64_t*>(y),
-        reinterpret_cast<uint64_t*>(m));
+        reinterpret_cast<uint64_t*>(m)
+    );
+
+    std::cout << "  result = ";
+    logU384(reinterpret_cast<uint8_t*>(x));
+
 
     //(void)state;
     return ++instr;
 }
+
+
+uint8_t less_than_or_equal384_64bitlimbs_try(const uint64_t* const x, const uint64_t* const y){
+  for (int i=(384/64)-1;i>=0;i--){
+    if (x[i]>y[i])
+      return 0;
+    else if (x[i]<y[i])
+      return 1;
+  }
+
+  return 1;
+}
+
+
+
+void subtract384_64bitlimbs_try(uint64_t* const out, const uint64_t* const x, const uint64_t* const y){
+  uint64_t carry=0;
+#pragma unroll
+  for (int i=0; i<(384/64); i++){
+    uint64_t temp = x[i]-carry;
+    carry = (temp<y[i] || x[i]<carry) ? 1:0;
+    out[i] = temp-y[i];
+
+  }
+}
+
+
+
+
+// montmul384_64bitlimbs
+void montgomery_multiplication_384(uint64_t* const out, const uint64_t* const x, const uint64_t* const y, const uint64_t* const m, uint64_t inv){
+  //const auto start_time = chrono_clock::now();
+
+  /*
+  for (int i=0; i<6;i++) {
+    std::cout << "montgomery_multiplication_384 inputs before doing anything. i=" << i << " x[i]: " << x[i] << std::endl;
+  }
+
+  for (int i=0; i<6;i++) {
+    std::cout << "montgomery_multiplication_384 inputs before doing anything. i=" << i << " y[i]: " << y[i] << std::endl;
+  }
+
+  std::cout << "montgomery_multiplication_384 inputs before doing anything. inv=" << inv << std::endl;
+  */
+
+  //using __uint128_t = interp::uint128_t;
+  // (384/64)*2+1 = 13
+  uint64_t A[(384/64)*2+1];
+  for (int i=0;i<(384/64)*2+1;i++)
+    A[i]=0;
+
+  for (int i=0; i<(384/64); i++){
+    uint64_t ui = (A[i]+x[i]*y[0])*inv;
+    uint64_t carry = 0;
+#pragma unroll
+    for (int j=0; j<(384/64); j++){
+      uint128_t xiyj = (uint128_t)x[i]*y[j];
+      uint128_t uimj = (uint128_t)ui*m[j];
+      uint128_t partial_sum = xiyj+carry+A[i+j];
+      uint128_t sum = uimj+partial_sum;
+      A[i+j] = (uint64_t)sum;
+      carry = sum>>64;
+
+      if (sum<partial_sum){
+        int k=2;
+        while ( i+j+k<(384/64)*2 && A[i+j+k]==(uint64_t)0-1 ){
+          A[i+j+k]=0;
+          k++;
+        }
+        if (i+j+k<(384/64)*2+1)
+          A[i+j+k]+=1;
+      }
+
+    }
+    A[i+(384/64)]+=carry;
+  }
+
+  /*
+  for (int i=0; i<(384/64)*2+1;i++) {
+    std::cout << "op_mulmodmont384 bigint.h res1. i=" << i << " A[i]: " << A[i] << std::endl;
+  }
+  */
+
+
+
+  for (int i=0; i<(384/64);i++)
+    out[i] = A[i+(384/64)];
+
+
+  if (A[(384/64)*2]>0 || less_than_or_equal384_64bitlimbs_try(m,out))
+    subtract384_64bitlimbs_try(out, out, m);
+
+
+  /*
+  for (int i=0; i<(384/64);i++) {
+    std::cout << "op_mulmodmont384 bigint.h result. i=" << i << " out[i]: " << out[i] << std::endl;
+  }
+  */
+
+
+
+  //const auto end_time = chrono_clock::now();
+  //std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time)
+  //std::chrono::microseconds one_loop = (end_time - start_time);
+  //montmul_duration = montmul_duration + std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time);
+}
+
+
 
 const instruction* op_mulmodmont384(const instruction* instr, execution_state& state) noexcept
 {
@@ -1352,15 +1470,24 @@ const instruction* op_mulmodmont384(const instruction* instr, execution_state& s
     const auto y = &state.memory[static_cast<size_t>(y_offset)];
     const auto m = &state.memory[static_cast<size_t>(m_offset)];
 
-    std::cout << "op_mulmodmont384\nx = ";
+    std::cout << "op_mulmodmont384\n    x = ";
     logU384(reinterpret_cast<uint8_t*>(x));
-    std::cout << "y = ";
+    std::cout << "    y = ";
     logU384(reinterpret_cast<uint8_t*>(y));
-    std::cout << "r_inv = " << intx::to_string(inv, 16) << std::endl;
-    std::cout << "modulus = ";
-    logU384(reinterpret_cast<uint8_t*>(m));
+    //std::cout << "r_inv = " << intx::to_string(inv, 16) << std::endl;
+    //std::cout << "modulus = ";
+    //logU384(reinterpret_cast<uint8_t*>(m));
 
+    /*
     montmul384_64bitlimbs(
+        reinterpret_cast<uint64_t*>(x),
+        reinterpret_cast<uint64_t*>(x),
+        reinterpret_cast<uint64_t*>(y),
+        reinterpret_cast<uint64_t*>(m),
+        static_cast<uint64_t>(inv)
+    );
+    */
+    montgomery_multiplication_384(
         reinterpret_cast<uint64_t*>(x),
         reinterpret_cast<uint64_t*>(x),
         reinterpret_cast<uint64_t*>(y),
